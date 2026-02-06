@@ -1,0 +1,45 @@
+Problem Description
+
+Create a comprehensive financial health assessment platform for small and medium enterprises (SMEs) that uses AI to analyze financial statements, cash flow patterns, and business metrics to provide actionable insights and recommendations. The system should evaluate creditworthiness, identify financial risks, suggest cost optimization strategies, and recommend suitable financial products from banks and NBFCs. Advanced features include automated bookkeeping assistance, tax compliance checking, financial forecasting, working capital optimization, and integration with GST returns and banking APIs. The platform must handle multiple business types, provide industry-specific benchmarking, generate investor-ready financial reports, and offer multilingual support for regional business owners. The solution must maintain high security standards, ensure regulatory compliance, and provide clear visualization of financial metrics for non-finance business owners.
+
+Data Requirements
+
+Supported Input Sources:
+
+Uploaded documents: CSV / XLSX / PDF (text-based exports)
+Optional API integrations:
+▸ Max 2 banking/payment APIs
+▸ Optional GST filing data import
+
+
+Data Dimensions:
+
+Revenue streams
+Cost structures
+Expense categories
+Accounts receivable/payable
+Inventory levels (if applicable)
+Loan/credit obligations
+Tax deductions & compliance metadata
+
+
+Industry Segmentation:
+
+Manufacturing, Retail, Agriculture, Services, Logistics, E-commerce, etc.
+
+
+
+Multilingual Outputs:
+
+English + optionally Hindi/Regional
+
+Tooling Restrictions
+
+Allowed tooling stack:
+
+LLM: OpenAI GPT-5 or Claude (recommendation & narrative layer)
+Data Processing: Python (pandas)
+Frontend: React.js or Angular for visuals
+Database: PostgreSQL for secure storage
+Integrations: Max 2 banking/payment APIs
+Security: Mandatory encryption for all financial data at rest & in transit

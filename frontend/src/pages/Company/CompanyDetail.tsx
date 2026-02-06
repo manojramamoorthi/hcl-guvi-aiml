@@ -110,25 +110,49 @@ const CompanyDetail: React.FC = () => {
                     {/* AI Insights Summary Card */}
                     {healthScore?.ai_insights && (
                         <motion.div
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-indigo-600 text-white p-8 rounded-3xl shadow-xl shadow-indigo-500/20 relative overflow-hidden"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="bg-gradient-to-br from-indigo-600 to-violet-700 text-white p-8 rounded-3xl shadow-xl shadow-indigo-500/20 relative overflow-hidden"
                         >
                             <div className="absolute top-0 right-0 p-4 opacity-10">
                                 <ShieldCheck size={120} />
                             </div>
-                            <h3 className="text-lg font-bold mb-3 flex items-center">
-                                <BarChart3 className="mr-2" size={20} /> AI Analysis
+                            <h3 className="text-xl font-bold mb-4 flex items-center">
+                                <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-3">
+                                    <BarChart3 size={20} />
+                                </div>
+                                AI Deep Analysis
                             </h3>
-                            <p className="text-indigo-50 leading-relaxed text-sm">
-                                "{healthScore.ai_insights.substring(0, 200)}..."
-                            </p>
-                            <button className="mt-4 text-sm font-bold bg-white/20 hover:bg-white/30 px-4 py-2 rounded-xl transition-colors">
-                                Read Full Insight
-                            </button>
+                            <div className="prose prose-invert prose-sm">
+                                <p className="text-indigo-50 leading-relaxed line-clamp-6 mb-6">
+                                    {healthScore.ai_insights}
+                                </p>
+                            </div>
+                            <div className="space-y-3">
+                                <button
+                                    onClick={() => alert('Full report view coming soon!')}
+                                    className="w-full py-3 bg-white text-indigo-600 font-bold rounded-xl hover:bg-indigo-50 transition-all flex items-center justify-center"
+                                >
+                                    Full Analysis View
+                                </button>
+                                <button
+                                    onClick={async () => {
+                                        try {
+                                            const res = await apiClient.get(`/analysis/${id}/report`);
+                                            alert("Report generated successfully! Scroll down to see it (mockup for now)");
+                                        } catch (e) {
+                                            alert("Failed to generate report. Checks logs.");
+                                        }
+                                    }}
+                                    className="w-full py-3 bg-indigo-500/30 text-white border border-indigo-400/30 font-bold rounded-xl hover:bg-indigo-500/40 transition-all"
+                                >
+                                    Generate Investor Report
+                                </button>
+                            </div>
                         </motion.div>
                     )}
                 </div>
+
 
                 {/* Right Column - Scores and Ratios */}
                 <div className="lg:col-span-2 space-y-6">

@@ -244,6 +244,45 @@ Return ONLY valid JSON array."""
         except json.JSONDecodeError:
             return []
     
+    def generate_investor_report(
+        self,
+        company_data: Dict,
+        financial_summary: Dict,
+        health_score: Dict,
+        language: str = "en"
+    ) -> str:
+        """
+        Generate a comprehensive, investor-ready financial report
+        """
+        system_prompt = f"""You are a senior investment analyst. Generate a professional, investor-ready financial report for an SME.
+The report should be structured, data-driven, and highlight potential for scale while being transparent about risks.
+Output language: {'English' if language == 'en' else 'Hindi'}"""
+        
+        user_prompt = f"""Generate an investment profile for {company_data.get('name')}.
+        
+Business Context:
+- Industry: {company_data.get('industry')}
+- Annual Revenue: ₹{company_data.get('annual_revenue', 0):,.0f}
+
+Financial Performance Summary:
+{json.dumps(financial_summary, indent=2)}
+
+Health Assessment:
+- Score: {health_score.get('total_score')}/100
+- Grade: {health_score.get('grade')}
+
+Please structure the report with the following sections:
+1. Executive Summary
+2. Business Overview & Market Position
+3. Financial Performance Analysis
+4. Risk Assessment & Mitigation
+5. Growth Trajectory & Opportunity
+6. Investment Recommendation
+
+Use professional financial terminology and keep it rigorous yet accessible."""
+        
+        return self.generate_completion(system_prompt, user_prompt)
+
     def translate_content(self, content: str, target_language: str) -> str:
         """
         Translate content to target language

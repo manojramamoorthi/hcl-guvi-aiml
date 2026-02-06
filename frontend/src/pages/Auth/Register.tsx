@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Mail, Lock, User, Phone, Loader2, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 const Register: React.FC = () => {
     const [formData, setFormData] = useState({
@@ -31,7 +32,7 @@ const Register: React.FC = () => {
             await register(formData);
             navigate('/dashboard');
         } catch (err: any) {
-            setError(err.response?.data?.detail || 'Registration failed. Please try again.');
+            setError(getErrorMessage(err));
         } finally {
             setIsSubmitting(false);
         }

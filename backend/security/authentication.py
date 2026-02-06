@@ -125,7 +125,6 @@ async def get_current_user(
     Get current authenticated user from JWT token
     
     Dependency function for protected routes.
-    MODIFIED: Returns a default user if security is skipped (DEVELOPMENT ONLY)
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -133,30 +132,27 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    # Check if we should skip security (default behavior for now as per user request)
-    # Trying to get the first user in the database to act as the default user
-    default_user = db.query(User).first()
-    
     try:
-        if token:
-            payload = AuthService.decode_token(token)
-            user_id: int = int(payload.get("sub"))
-            if user_id:
-                user = db.query(User).filter(User.id == user_id).first()
-                if user and user.is_active:
-                    return user
-    except (JWTError, ValueError, HTTPException):
-        # If token is invalid but we have a default user, use it
-        if default_user:
-            return default_user
-    
-    # Fallback to default user if no token or token invalid
-    if default_user:
-        return default_user
+        payload = AuthService.decode_token(token)
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
+            raise credentials_exception
+            
+        user_id: int = int(user_id_str)
+        user = db.query(User).filter(User.id == user_id).first()
         
-    # If no users exist at all, we might need to create one or raise error
-    # For linking purposes, we expect at least one user to exist or be created during register
-    raise credentials_exception
+        if user is None:
+            raise credentials_exception
+            
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Inactive user account"
+            )
+            
+        return user
+    except (JWTError, ValueError, HTTPException) as e:
+        raise credentials_exception
 
 
 async def get_current_active_user(

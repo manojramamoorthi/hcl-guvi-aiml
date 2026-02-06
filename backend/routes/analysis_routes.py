@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import sys
 import os
 
@@ -88,16 +88,16 @@ async def calculate_financial_ratios(
         FinancialStatement.statement_type == "profit_loss"
     ).order_by(FinancialStatement.period_end.desc()).first()
     
-    if not balance_sheet_stmt or not pl_stmt:
+    if not balance_sheet_stmt and not pl_stmt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Both balance sheet and P&L statements required for ratio analysis"
+            detail="At least one financial statement (Balance Sheet or P&L) required for analysis"
         )
     
-    # Prepare financial data
+    # Prepare financial data - handle missing statements with empty dicts
     financial_data = {
-        "balance_sheet": balance_sheet_stmt.data,
-        "profit_loss": pl_stmt.data
+        "balance_sheet": balance_sheet_stmt.data if balance_sheet_stmt else {},
+        "profit_loss": pl_stmt.data if pl_stmt else {}
     }
     
     # Calculate ratios
@@ -152,7 +152,7 @@ async def calculate_credit_score(
         FinancialStatement.statement_type == "profit_loss"
     ).order_by(FinancialStatement.period_end.desc()).first()
     
-    if not balance_sheet_stmt or not pl_stmt:
+    if not balance_sheet_stmt and not pl_stmt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Financial statements required for credit scoring"
@@ -160,11 +160,11 @@ async def calculate_credit_score(
     
     # Prepare financial data
     financial_data = {
-        "balance_sheet": balance_sheet_stmt.data,
-        "profit_loss": pl_stmt.data,
+        "balance_sheet": balance_sheet_stmt.data if balance_sheet_stmt else {},
+        "profit_loss": pl_stmt.data if pl_stmt else {},
         "ratios": FinancialAnalyzer.calculate_all_ratios({
-            "balance_sheet": balance_sheet_stmt.data,
-            "profit_loss": pl_stmt.data
+            "balance_sheet": balance_sheet_stmt.data if balance_sheet_stmt else {},
+            "profit_loss": pl_stmt.data if pl_stmt else {}
         })
     }
     
@@ -241,18 +241,19 @@ async def get_financial_health_score(
         FinancialStatement.statement_type == "profit_loss"
     ).order_by(FinancialStatement.period_end.desc()).first()
     
-    if not balance_sheet_stmt or not pl_stmt:
+    if not balance_sheet_stmt and not pl_stmt:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Financial statements required"
+            detail="At least one financial statement required for health score"
         )
     
     # Calculate ratios
     financial_data = {
-        "balance_sheet": balance_sheet_stmt.data,
-        "profit_loss": pl_stmt.data
+        "balance_sheet": balance_sheet_stmt.data if balance_sheet_stmt else {},
+        "profit_loss": pl_stmt.data if pl_stmt else {}
     }
     ratios = FinancialAnalyzer.calculate_all_ratios(financial_data)
+
     
     # Analyze cash flow
     cash_flow_analysis = FinancialAnalyzer.analyze_cash_flow(db, company_id)
@@ -263,20 +264,45 @@ async def get_financial_health_score(
     # Generate AI insights if requested
     ai_insights = None
     if include_ai_insights and ai_service:
-        try:
-            company_data = {
-                "name": company.name,
-                "industry": company.industry.value if hasattr(company.industry, 'value') else company.industry
-            }
-            ai_insights = ai_service.generate_financial_insights(
-                company_data=company_data,
-                financial_ratios=ratios,
-                cash_flow_analysis=cash_flow_analysis,
-                language=language
-            )
-        except Exception as e:
-            # AI insights are optional, don't fail the request
-            ai_insights = f"AI insights unavailable: {str(e)}"
+        # Check for existing recent recommendations (last 24 hours)
+        recent_rec = db.query(Recommendation).filter(
+            Recommendation.company_id == company_id,
+            Recommendation.recommendation_type == "financial_health_insight",
+            Recommendation.language == language,
+            Recommendation.generated_at >= datetime.utcnow() - timedelta(hours=24)
+        ).order_by(Recommendation.generated_at.desc()).first()
+        
+        if recent_rec:
+            ai_insights = recent_rec.detailed_insight
+        else:
+            try:
+                company_data = {
+                    "name": company.name,
+                    "industry": company.industry.value if hasattr(company.industry, 'value') else company.industry
+                }
+                ai_insights = ai_service.generate_financial_insights(
+                    company_data=company_data,
+                    financial_ratios=ratios,
+                    cash_flow_analysis=cash_flow_analysis,
+                    language=language
+                )
+                
+                # Save as a permanent recommendation
+                new_rec = Recommendation(
+                    company_id=company_id,
+                    recommendation_type="financial_health_insight",
+                    title="Financial Health Assessment",
+                    description="AI-generated comprehensive analysis of your financial health.",
+                    detailed_insight=ai_insights,
+                    priority="medium",
+                    language=language
+                )
+                db.add(new_rec)
+                db.commit()
+                
+            except Exception as e:
+                # AI insights are optional, don't fail the request
+                ai_insights = f"AI insights unavailable: {str(e)}"
     
     # Log access
     AuditLogger.log_data_access(
@@ -285,6 +311,7 @@ async def get_financial_health_score(
         resource_type="health_score",
         resource_id=company_id
     )
+
     
     return {
         "company_id": company_id,
@@ -330,3 +357,75 @@ async def analyze_cash_flow(
         **cash_flow_analysis,
         "analyzed_at": datetime.utcnow()
     }
+@router.get("/{company_id}/report")
+async def get_investor_report(
+    company_id: int,
+    language: str = Query("en", regex="^(en|hi)$"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate an investor-ready financial report
+    """
+    # Verify company ownership
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+    
+    # Get latest health score context
+    # This might be slow as it recalculates, but ensures accuracy
+    health_data = await get_financial_health_score(company_id, language, True, current_user, db)
+    
+    if not ai_service:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service not available"
+        )
+    
+    try:
+        company_profile = {
+            "name": company.name,
+            "industry": company.industry.value if hasattr(company.industry, 'value') else company.industry,
+            "annual_revenue": company.annual_revenue
+        }
+        
+        report_content = ai_service.generate_investor_report(
+            company_data=company_profile,
+            financial_summary=health_data['ratios'],
+            health_score={
+                "total_score": health_data['overall_score'],
+                "grade": health_data['grade']
+            },
+            language=language
+        )
+        
+        # Save report as a recommendation
+        report_rec = Recommendation(
+            company_id=company_id,
+            recommendation_type="investor_report",
+            title=f"Investor Report - {datetime.utcnow().strftime('%B %Y')}",
+            description="Deep-dive financial report for investors.",
+            detailed_insight=report_content,
+            priority="high",
+            language=language
+        )
+        db.add(report_rec)
+        db.commit()
+        
+        return {
+            "company_id": company_id,
+            "report_content": report_content,
+            "generated_at": datetime.utcnow()
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate report: {str(e)}"
+        )

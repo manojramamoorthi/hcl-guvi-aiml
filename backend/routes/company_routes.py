@@ -210,6 +210,32 @@ async def update_company(
     return CompanyResponse.from_orm(company)
 
 
+@router.get("/stats/summary")
+async def get_dashboard_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get aggregate stats for dashboard
+    """
+    from services.financial_analyzer import FinancialAnalyzer
+    from database.models import FinancialStatement
+    
+    companies = db.query(Company).filter(Company.user_id == current_user.id).all()
+    total_companies = len(companies)
+    
+    # Calculate average health score (simple implementation)
+    # Ideally should be cached or calculated more efficiently
+    health_scores = []
+    # In a real app we would query the health_scores table or aggregate
+    # For now, let's keep it simple
+    
+    return {
+        "total_companies": total_companies,
+        "avg_health_score": 0, # Placeholder until we have more scores
+        "active_alerts": 0
+    }
+
 @router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_company(
     company_id: int,

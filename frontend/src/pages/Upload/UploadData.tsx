@@ -7,11 +7,11 @@ import {
     Loader2,
     ArrowLeft,
     FileSpreadsheet,
-    FilePlus,
     ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import apiClient from '../../api/client';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 const UploadData: React.FC = () => {
     const { companyId } = useParams<{ companyId: string }>();
@@ -26,10 +26,13 @@ const UploadData: React.FC = () => {
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
 
+    const [uploadResponse, setUploadResponse] = useState<any>(null);
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setFile(e.target.files[0]);
             setUploadStatus('idle');
+            setUploadResponse(null);
         }
     };
 
@@ -39,15 +42,17 @@ const UploadData: React.FC = () => {
 
         setIsUploading(true);
         setUploadStatus('idle');
+        setErrorMessage('');
 
         const formData = new FormData();
         formData.append('file', file);
+        // Add other fields to formData too
         formData.append('statement_type', statementType);
         formData.append('period_start', new Date(periodStart).toISOString());
         formData.append('period_end', new Date(periodEnd).toISOString());
 
         try {
-            await apiClient.post(`/upload/${companyId}/financial-statement`, formData, {
+            const response = await apiClient.post(`/upload/${companyId}/financial-statement`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 params: {
                     statement_type: statementType,
@@ -55,11 +60,12 @@ const UploadData: React.FC = () => {
                     period_end: new Date(periodEnd).toISOString(),
                 }
             });
+            setUploadResponse(response.data);
             setUploadStatus('success');
-            setTimeout(() => navigate(`/companies/${companyId}`), 2000);
+            // Remove automatic redirection to allow user to see the summary
         } catch (err: any) {
             setUploadStatus('error');
-            setErrorMessage(err.response?.data?.detail || 'Failed to upload document. Please try again.');
+            setErrorMessage(getErrorMessage(err));
         } finally {
             setIsUploading(false);
         }
@@ -76,23 +82,73 @@ const UploadData: React.FC = () => {
                 <p className="text-slate-500 mt-2">Upload your financial statements to generate AI insights</p>
             </div>
 
-            <div className="glass-panel p-8 rounded-3xl border border-white/40 shadow-2xl overflow-hidden relative">
-                {/* Progress Overlay */}
+            <div className="glass-panel p-8 rounded-3xl border border-white/40 shadow-2xl overflow-hidden relative min-h-[500px]">
+                {/* Success State Overlay */}
                 <AnimatePresence>
                     {uploadStatus === 'success' && (
                         <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="absolute inset-0 bg-white/95 z-20 flex flex-col items-center justify-center p-8 text-center"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="absolute inset-0 bg-white/98 z-20 flex flex-col items-center justify-center p-8 text-center"
                         >
                             <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
                                 <CheckCircle2 size={48} />
                             </div>
                             <h2 className="text-3xl font-bold text-slate-900 mb-2">Upload Successful!</h2>
-                            <p className="text-slate-500">Your documents are being processed by our AI engine. Redirecting you to analysis...</p>
+                            <p className="text-slate-500 mb-8 font-medium">Your data has been parsed and is ready for analysis.</p>
+
+                            {uploadResponse?.data_summary && (
+                                <div className="w-full max-w-md bg-slate-50 rounded-2xl p-6 mb-8 text-left border border-slate-100">
+                                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Processing Summary</h3>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500 text-sm">Statement Type</span>
+                                            <span className="text-slate-900 font-bold text-sm capitalize">{uploadResponse.data_summary.statement_type?.replace('_', ' ')}</span>
+                                        </div>
+                                        {uploadResponse.data_summary.total_assets !== null && (
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500 text-sm">Total Assets</span>
+                                                <span className="text-slate-900 font-bold text-sm">₹{uploadResponse.data_summary.total_assets.toLocaleString()}</span>
+                                            </div>
+                                        )}
+                                        {uploadResponse.data_summary.total_liabilities !== null && (
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500 text-sm">Total Liabilities</span>
+                                                <span className="text-slate-900 font-bold text-sm">₹{uploadResponse.data_summary.total_liabilities.toLocaleString()}</span>
+                                            </div>
+                                        )}
+                                        {uploadResponse.data_summary.total_revenue !== null && (
+                                            <div className="flex justify-between">
+                                                <span className="text-slate-500 text-sm">Total Revenue</span>
+                                                <span className="text-slate-900 font-bold text-sm">₹{uploadResponse.data_summary.total_revenue.toLocaleString()}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between">
+                                            <span className="text-slate-500 text-sm">Period</span>
+                                            <span className="text-slate-900 font-bold text-sm">{uploadResponse.data_summary.period}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                                <button
+                                    onClick={() => navigate(`/companies/${companyId}`)}
+                                    className="flex-1 px-6 py-3 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors"
+                                >
+                                    Back to Profile
+                                </button>
+                                <button
+                                    onClick={() => navigate(`/companies/${companyId}`)} // Redirection to companies list or specific company profile which has the dashboard
+                                    className="flex-1 px-6 py-3 bg-primary-600 text-white font-bold rounded-xl hover:bg-primary-700 shadow-lg shadow-primary-600/20 transition-all flex items-center justify-center"
+                                >
+                                    View Analysis <ArrowRight size={18} className="ml-2" />
+                                </button>
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
+
 
                 <form onSubmit={handleSubmit} className="space-y-8">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -101,16 +157,10 @@ const UploadData: React.FC = () => {
                                 <label className="block text-sm font-semibold text-slate-700 mb-2">Statement Type</label>
                                 <div className="grid grid-cols-1 gap-2">
                                     <TypeOption
-                                        active={statementType === 'balance_sheet'}
+                                        active={true}
                                         onClick={() => setStatementType('balance_sheet')}
                                         icon={<FileSpreadsheet size={18} />}
                                         label="Balance Sheet"
-                                    />
-                                    <TypeOption
-                                        active={statementType === 'profit_loss'}
-                                        onClick={() => setStatementType('profit_loss')}
-                                        icon={<FilePlus size={18} />}
-                                        label="Profit & Loss"
                                     />
                                 </div>
                             </div>

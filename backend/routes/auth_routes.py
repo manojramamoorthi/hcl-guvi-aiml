@@ -148,14 +148,19 @@ async def login(
     }
 
 
+class TokenRefresh(BaseModel):
+    refresh_token: str
+
+
 @router.post("/refresh")
 async def refresh_token(
-    refresh_token: str,
+    data: TokenRefresh,
     db: Session = Depends(get_db)
 ):
     """
     Refresh access token using refresh token
     """
+    refresh_token = data.refresh_token
     try:
         payload = AuthService.decode_token(refresh_token)
         

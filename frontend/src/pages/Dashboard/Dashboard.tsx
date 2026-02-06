@@ -17,14 +17,17 @@ const Dashboard: React.FC = () => {
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                const res = await apiClient.get('/companies/');
-                setCompanies(res.data);
+                const [companiesRes, statsRes] = await Promise.all([
+                    apiClient.get('/companies/'),
+                    apiClient.get('/companies/stats/summary')
+                ]);
 
-                // Mock some aggregate stats for now as the backend doesn't have an aggregate endpoint
+                setCompanies(companiesRes.data);
+
                 setStats({
-                    totalCompanies: res.data.length,
-                    avgHealthScore: 72,
-                    activeAlerts: 3
+                    totalCompanies: statsRes.data.total_companies,
+                    avgHealthScore: statsRes.data.avg_health_score || 0,
+                    activeAlerts: statsRes.data.active_alerts || 0
                 });
             } catch (err) {
                 console.error('Failed to fetch dashboard data', err);

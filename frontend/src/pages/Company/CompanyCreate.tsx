@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import apiClient from '../../api/client';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 const CompanyCreate: React.FC = () => {
     const navigate = useNavigate();
@@ -42,9 +43,16 @@ const CompanyCreate: React.FC = () => {
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
+
+        let processedValue: any = value;
+        if (type === 'number') {
+            processedValue = value === '' ? 0 : parseFloat(value);
+            if (isNaN(processedValue)) processedValue = 0;
+        }
+
         setFormData(prev => ({
             ...prev,
-            [name]: type === 'number' ? parseFloat(value) : value
+            [name]: processedValue
         }));
     };
 
@@ -54,17 +62,43 @@ const CompanyCreate: React.FC = () => {
         setError(null);
 
         try {
-            // Clean data before sending
-            const submitData = { ...formData };
-            if (!submitData.founded_date) delete (submitData as any).founded_date;
-            if (!submitData.employee_count) (submitData as any).employee_count = 0;
-            if (!submitData.annual_revenue) (submitData as any).annual_revenue = 0;
+            // Clean data before sending - remove empty strings and convert to proper types
+            const submitData: any = {};
+
+            Object.entries(formData).forEach(([key, value]) => {
+                // Don't send empty strings for optional fields
+                if (value !== '') {
+                    submitData[key] = value;
+                } else {
+                    // Fields that should be null if empty
+                    const optionalFields = [
+                        'registration_number', 'pan', 'gstin', 'sub_industry',
+                        'founded_date', 'website', 'address_line1', 'address_line2',
+                        'city', 'state', 'pincode'
+                    ];
+                    if (optionalFields.includes(key)) {
+                        submitData[key] = null;
+                    }
+                }
+            });
+
+            // Ensure numeric fields are numbers
+            submitData.employee_count = Number(submitData.employee_count || 0);
+            submitData.annual_revenue = Number(submitData.annual_revenue || 0);
+
+            // Special handling for founded_date if it's provided
+            if (submitData.founded_date && typeof submitData.founded_date === 'string' && submitData.founded_date.length === 10) {
+                // Append time to satisfy backend datetime requirement
+                submitData.founded_date = `${submitData.founded_date}T00:00:00`;
+            } else if (submitData.founded_date === '') {
+                delete submitData.founded_date;
+            }
 
             const res = await apiClient.post('/companies/', submitData);
             navigate(`/companies/${res.data.id}`);
         } catch (err: any) {
             console.error('Failed to create company', err);
-            setError(err.response?.data?.detail || 'Failed to create company. Please check your inputs.');
+            setError(getErrorMessage(err));
         } finally {
             setLoading(false);
         }

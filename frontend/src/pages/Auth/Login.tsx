@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getErrorMessage } from '../../utils/errorUtils';
 
 const Login: React.FC = () => {
     const [email, setEmail] = useState('');
@@ -26,7 +27,7 @@ const Login: React.FC = () => {
             await login(formData);
             navigate('/dashboard');
         } catch (err: any) {
-            setError(err.response?.data?.detail || 'Invalid email or password');
+            setError(getErrorMessage(err));
         } finally {
             setIsSubmitting(false);
         }
