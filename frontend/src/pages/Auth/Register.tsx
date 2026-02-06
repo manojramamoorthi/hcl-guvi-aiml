@@ -175,10 +175,41 @@ const Register: React.FC = () => {
                                 Sign in
                             </Link>
                         </p>
+
+                    <div className="mt-6 pt-6 border-t border-slate-200">
+                        <button
+                            onClick={async () => {
+                                setIsSubmitting(true);
+                                try {
+                                    const response = await fetch('http://localhost:8000/api/v1/auth/reviewer-login', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' }
+                                    });
+                                    const data = await response.json();
+                                    if (response.ok) {
+                                        localStorage.setItem('token', data.access_token);
+                                        localStorage.setItem('user', JSON.stringify(data.user));
+                                        window.location.href = '/dashboard';
+                                    } else {
+                                        setError(data.detail || 'Reviewer login failed');
+                                    }
+                                } catch (err) {
+                                    setError('Network error');
+                                } finally {
+                                    setIsSubmitting(false);
+                                }
+                            }}
+                            disabled={isSubmitting}
+                            className="w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium rounded-xl transition-colors flex items-center justify-center space-x-2"
+                        >
+                            <Lock className="w-4 h-4" />
+                            <span>Login as System Reviewer</span>
+                        </button>
                     </div>
-                </motion.div>
             </div>
-        </div>
+        </motion.div>
+            </div >
+        </div >
     );
 };
 

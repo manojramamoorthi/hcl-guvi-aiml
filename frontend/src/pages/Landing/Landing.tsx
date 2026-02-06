@@ -83,7 +83,7 @@ const Landing: React.FC = () => {
                         >
                             <div className="relative z-10 glass-card p-2 transform rotate-1 hover:rotate-0 transition-transform duration-500">
                                 <img
-                                    src="/hero_finance_dashboard.png"
+                                    src="https://w7.pngwing.com/pngs/576/642/png-transparent-data-analysis-analytics-management-big-data-data-processing-business-template-text-people.png"
                                     alt="Financial Dashboard Preview"
                                     className="rounded-xl shadow-2xl w-full h-auto"
                                 />

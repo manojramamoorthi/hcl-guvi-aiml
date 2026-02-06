@@ -73,22 +73,22 @@ const Dashboard: React.FC = () => {
                     label="Total Companies"
                     value={stats.totalCompanies.toString()}
                     icon={<Building2 className="text-primary-600" />}
-                    trend="+1 this month"
-                    isPositive={true}
+                    trend={stats.totalCompanies > 0 ? "Active portfolio" : "No companies yet"}
+                    isPositive={stats.totalCompanies > 0}
                 />
                 <StatCard
                     label="Avg. Health Score"
                     value={`${stats.avgHealthScore}/100`}
                     icon={<TrendingUp className="text-emerald-600" />}
-                    trend="Good"
-                    isPositive={true}
+                    trend={stats.avgHealthScore >= 70 ? "Healthy" : (stats.avgHealthScore >= 50 ? "Stable" : "Attention needed")}
+                    isPositive={stats.avgHealthScore >= 60}
                 />
                 <StatCard
                     label="Active Alerts"
                     value={stats.activeAlerts.toString()}
                     icon={<AlertTriangle className="text-amber-600" />}
-                    trend="High priority"
-                    isPositive={false}
+                    trend={stats.activeAlerts > 0 ? "Requires action" : "System normal"}
+                    isPositive={stats.activeAlerts === 0}
                 />
             </div>
 
@@ -112,7 +112,11 @@ const Dashboard: React.FC = () => {
                         <tbody className="divide-y divide-slate-100">
                             {companies.length > 0 ? (
                                 companies.slice(0, 5).map((company) => (
-                                    <tr key={company.id} className="hover:bg-slate-50/30 transition-colors group">
+                                    <tr
+                                        key={company.id}
+                                        className="hover:bg-slate-50/30 transition-colors group cursor-pointer"
+                                        onClick={() => window.location.href = `/companies/${company.id}`}
+                                    >
                                         <td className="px-8 py-5">
                                             <div className="flex items-center">
                                                 <div className="w-10 h-10 rounded-xl bg-primary-100 text-primary-600 flex items-center justify-center font-bold mr-3 group-hover:bg-primary-600 group-hover:text-white transition-colors">
@@ -135,9 +139,12 @@ const Dashboard: React.FC = () => {
                                         <td className="px-8 py-5">
                                             <div className="flex items-center space-x-2">
                                                 <div className="w-full max-w-[100px] h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-emerald-500 rounded-full" style={{ width: '75%' }}></div>
+                                                    <div
+                                                        className={`h-full rounded-full ${company.health_score && company.health_score >= 80 ? 'bg-emerald-500' : (company.health_score && company.health_score >= 60 ? 'bg-blue-500' : 'bg-amber-500')}`}
+                                                        style={{ width: `${company.health_score || 0}%` }}
+                                                    ></div>
                                                 </div>
-                                                <span className="text-sm font-bold text-slate-700">75</span>
+                                                <span className="text-sm font-bold text-slate-700">{company.health_score || 'N/A'}</span>
                                             </div>
                                         </td>
                                         <td className="px-8 py-5 text-right">

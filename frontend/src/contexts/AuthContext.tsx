@@ -7,6 +7,7 @@ interface AuthContextType {
     loading: boolean;
     login: (data: FormData) => Promise<void>;
     register: (data: any) => Promise<void>;
+    reviewerLogin: () => Promise<void>;
     logout: () => void;
 }
 
@@ -54,6 +55,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(response.data.user);
     };
 
+    const reviewerLogin = async () => {
+        const response = await apiClient.post<AuthResponse>('/auth/reviewer-login');
+        localStorage.setItem('access_token', response.data.access_token);
+        localStorage.setItem('refresh_token', response.data.refresh_token);
+        setUser(response.data.user);
+    };
+
     const logout = () => {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
@@ -61,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, register, reviewerLogin, logout }}>
             {children}
         </AuthContext.Provider>
     );

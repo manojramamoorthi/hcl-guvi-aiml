@@ -91,6 +91,17 @@ const UploadData: React.FC = () => {
                             animate={{ opacity: 1, scale: 1 }}
                             className="absolute inset-0 bg-white/98 z-20 flex flex-col items-center justify-center p-8 text-center"
                         >
+                            {/* Close Button */}
+                            <button
+                                onClick={() => setUploadStatus('idle')}
+                                className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full transition-colors"
+                                aria-label="Close"
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400 hover:text-slate-600">
+                                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                                </svg>
+                            </button>
                             <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-6">
                                 <CheckCircle2 size={48} />
                             </div>
@@ -111,12 +122,6 @@ const UploadData: React.FC = () => {
                                                 <span className="text-slate-900 font-bold text-sm">₹{uploadResponse.data_summary.total_assets.toLocaleString()}</span>
                                             </div>
                                         )}
-                                        {uploadResponse.data_summary.total_liabilities !== null && (
-                                            <div className="flex justify-between">
-                                                <span className="text-slate-500 text-sm">Total Liabilities</span>
-                                                <span className="text-slate-900 font-bold text-sm">₹{uploadResponse.data_summary.total_liabilities.toLocaleString()}</span>
-                                            </div>
-                                        )}
                                         {uploadResponse.data_summary.total_revenue !== null && (
                                             <div className="flex justify-between">
                                                 <span className="text-slate-500 text-sm">Total Revenue</span>
@@ -128,6 +133,23 @@ const UploadData: React.FC = () => {
                                             <span className="text-slate-900 font-bold text-sm">{uploadResponse.data_summary.period}</span>
                                         </div>
                                     </div>
+
+                                    {uploadResponse.parsed_data && (
+                                        <div className="mt-6 pt-6 border-t border-slate-200">
+                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Line Items (Deep AI)</h3>
+                                            <div className="max-h-48 overflow-y-auto pr-2 space-y-2">
+                                                {/* Recursively show key figures */}
+                                                {Object.entries(uploadResponse.parsed_data).map(([key, val]: any) => (
+                                                    <div key={key} className="text-xs">
+                                                        <span className="text-slate-500 font-medium capitalize">{key.replace('_', ' ')}:</span>
+                                                        <pre className="mt-1 bg-white p-2 rounded border border-slate-100 text-[10px] overflow-x-auto">
+                                                            {JSON.stringify(val, null, 2)}
+                                                        </pre>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

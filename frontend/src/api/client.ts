@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1';
+const API_BASE_URL = process.env.REACT_APP_API_URL || '/api/v1';
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -39,7 +39,6 @@ apiClient.interceptors.response.use(
                     });
                     const { access_token } = response.data;
                     localStorage.setItem('access_token', access_token);
-                    apiClient.defaults.headers.common.Authorization = `Bearer ${access_token}`;
                     originalRequest.headers.Authorization = `Bearer ${access_token}`;
                     return apiClient(originalRequest);
                 } catch (refreshError) {

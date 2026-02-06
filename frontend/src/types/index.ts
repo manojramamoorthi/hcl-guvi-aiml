@@ -32,6 +32,7 @@ export interface Company {
     country: string;
     created_at: string;
     updated_at: string;
+    health_score?: number;
 }
 
 export interface FinancialRatios {

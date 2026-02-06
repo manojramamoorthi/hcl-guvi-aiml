@@ -12,8 +12,10 @@ frontend/.env
 
 /logs
 /uploads
+backend/logs/app.log
 
 .env
+*.db
 quick-start.bat
 quick-start.sh
 sme_financial.db

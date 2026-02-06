@@ -5,7 +5,9 @@ Loads settings from environment variables
 from pydantic_settings import BaseSettings
 from typing import Optional
 import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables"""
@@ -21,7 +23,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     
     # Database
-    DATABASE_URL: str = "postgresql://sme_user:sme_password@localhost:5432/sme_financial_db"
+    DATABASE_URL: str = os.environ.get("DATABASE_URL", "postgresql://sme_user:sme_password@localhost:5432/sme_financial_db")
     DB_ECHO: bool = False  # Set to True to log SQL queries
     
     # Security
@@ -34,18 +36,18 @@ class Settings(BaseSettings):
     ENCRYPTION_KEY: str = "your-32-byte-encryption-key-here"
     
     # CORS
-    CORS_ORIGINS: list = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://127.0.0.1:3000",
-    ]
+    CORS_ORIGINS: list = ["*"]
     
     # AI Services
+    AI_PROVIDER: str = "gemini"  # "openai", "claude", "openrouter", or "gemini"
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4"
     CLAUDE_API_KEY: Optional[str] = None
     CLAUDE_MODEL: str = "claude-3-opus-20240229"
-    AI_PROVIDER: str = "openai"  # "openai" or "claude"
+    OPENROUTER_API_KEY: Optional[str] = os.getenv("OPENROUTER_API_KEY")
+    OPENROUTER_MODEL: str = "google/gemini-pro"
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL: str = "gemini-1.5-flash"
     
     # Banking Integration
     PLAID_CLIENT_ID: Optional[str] = None

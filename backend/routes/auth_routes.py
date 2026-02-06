@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 from datetime import datetime
 import sys
 import os
@@ -13,9 +14,10 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database.database import get_db
-from database.models import User
+from database.models import User, Company, FinancialStatement, IndustryType, Transaction
 from security import AuthService, create_user_tokens, get_current_user
 from security.audit_logger import AuditLogger
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth")
 
@@ -25,7 +27,7 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     full_name: str
-    phone: str = None
+    phone: Optional[str] = None
     language_preference: str = "en"
 
 
@@ -33,7 +35,7 @@ class UserResponse(BaseModel):
     id: int
     email: str
     full_name: str
-    phone: str = None
+    phone: Optional[str] = None
     is_active: bool
     language_preference: str
     created_at: datetime
@@ -47,6 +49,42 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str
     user: UserResponse
+
+
+@router.post("/reviewer-login", response_model=TokenResponse)
+async def reviewer_login(db: Session = Depends(get_db)):
+    """
+    Special login for reviewers.
+    Automatically creates a reviewer account and 3 sample companies with data.
+    """
+    reviewer_email = "reviewer@example.com"
+    user = db.query(User).filter(User.email == reviewer_email).first()
+    
+    if not user:
+        user = User(
+            email=reviewer_email,
+            hashed_password=AuthService.get_password_hash("reviewer123"),
+            full_name="System Reviewer",
+            is_active=True,
+            role="admin"
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    # Check for companies
+    # companies = db.query(Company).filter(Company.user_id == user.id).all()
+    # if not companies:
+        # Seeding logic disabled per requirements
+        # pass
+            
+        # db.commit()
+
+    tokens = create_user_tokens(user)
+    return {
+        **tokens,
+        "user": UserResponse.from_orm(user)
+    }
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)

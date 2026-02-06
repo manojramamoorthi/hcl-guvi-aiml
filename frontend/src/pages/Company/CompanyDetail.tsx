@@ -16,6 +16,7 @@ import {
 import { motion } from 'framer-motion';
 import apiClient from '../../api/client';
 import { Company, HealthScore } from '../../types';
+import ChatInterface from '../../components/analysis/ChatInterface';
 
 const CompanyDetail: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -194,22 +195,32 @@ const CompanyDetail: React.FC = () => {
                                     </div>
 
                                     <div className="space-y-4">
-                                        {Object.entries(healthScore.score_breakdown).map(([key, val], idx) => (
-                                            <div key={key}>
-                                                <div className="flex justify-between text-sm font-bold text-slate-700 mb-1 capitalize">
-                                                    <span>{key.replace('_', ' ')}</span>
-                                                    <span>{val}/25</span>
+                                        {Object.entries(healthScore.score_breakdown).map(([key, val], idx) => {
+                                            const maxMap: any = {
+                                                liquidity: 25,
+                                                profitability: 30,
+                                                leverage: 20,
+                                                efficiency: 15,
+                                                cash_flow: 10
+                                            };
+                                            const max = maxMap[key] || 25;
+                                            return (
+                                                <div key={key}>
+                                                    <div className="flex justify-between text-sm font-bold text-slate-700 mb-1 capitalize">
+                                                        <span>{key.replace('_', ' ')}</span>
+                                                        <span>{val}/{max}</span>
+                                                    </div>
+                                                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${(val / max) * 100}%` }}
+                                                            transition={{ duration: 1, delay: idx * 0.1 }}
+                                                            className={`h-full rounded-full ${idx === 0 ? 'bg-emerald-500' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-purple-500' : 'bg-amber-500'}`}
+                                                        ></motion.div>
+                                                    </div>
                                                 </div>
-                                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                    <motion.div
-                                                        initial={{ width: 0 }}
-                                                        animate={{ width: `${(val / 25) * 100}%` }}
-                                                        transition={{ duration: 1, delay: idx * 0.1 }}
-                                                        className={`h-full rounded-full ${idx === 0 ? 'bg-emerald-500' : idx === 1 ? 'bg-blue-500' : idx === 2 ? 'bg-purple-500' : 'bg-amber-500'}`}
-                                                    ></motion.div>
-                                                </div>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </div>
@@ -236,6 +247,7 @@ const CompanyDetail: React.FC = () => {
                     )}
                 </div>
             </div>
+            {company && <ChatInterface companyId={company.id.toString()} companyName={company.name} />}
         </div>
     );
 };

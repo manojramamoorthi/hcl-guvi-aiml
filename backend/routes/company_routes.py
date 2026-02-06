@@ -75,6 +75,7 @@ class CompanyResponse(BaseModel):
     country: str
     created_at: datetime
     updated_at: datetime
+    health_score: Optional[float] = None
     
     class Config:
         from_attributes = True
@@ -130,8 +131,42 @@ async def list_companies(
     """
     List all companies owned by current user
     """
+    from services.financial_analyzer import FinancialAnalyzer
+    from database.models import FinancialStatement
+
     companies = db.query(Company).filter(Company.user_id == current_user.id).all()
-    return [CompanyResponse.from_orm(c) for c in companies]
+    
+    results = []
+    for company in companies:
+        # Get latest health score if it exists
+        latest_bs = db.query(FinancialStatement).filter(
+            FinancialStatement.company_id == company.id,
+            FinancialStatement.statement_type == "balance_sheet"
+        ).order_by(FinancialStatement.period_end.desc()).first()
+        
+        latest_pl = db.query(FinancialStatement).filter(
+            FinancialStatement.company_id == company.id,
+            FinancialStatement.statement_type == "profit_loss"
+        ).order_by(FinancialStatement.period_end.desc()).first()
+        
+        health_score_val = None
+        if latest_bs and latest_pl:
+            try:
+                ratios = FinancialAnalyzer.calculate_all_ratios({
+                    "balance_sheet": latest_bs.data,
+                    "profit_loss": latest_pl.data
+                })
+                cash_flow = FinancialAnalyzer.analyze_cash_flow(db, company.id)
+                health = FinancialAnalyzer.calculate_financial_health_score(ratios, cash_flow)
+                health_score_val = health['total_score']
+            except Exception as e:
+                print(f"Error calculating score for {company.id}: {e}")
+        
+        resp = CompanyResponse.from_orm(company)
+        resp.health_score = health_score_val
+        results.append(resp)
+        
+    return results
 
 
 @router.get("/{company_id}", response_model=CompanyResponse)
@@ -225,14 +260,38 @@ async def get_dashboard_stats(
     total_companies = len(companies)
     
     # Calculate average health score (simple implementation)
-    # Ideally should be cached or calculated more efficiently
-    health_scores = []
-    # In a real app we would query the health_scores table or aggregate
-    # For now, let's keep it simple
+    total_score = 0
+    scored_count = 0
+    
+    for company in companies:
+        latest_bs = db.query(FinancialStatement).filter(
+            FinancialStatement.company_id == company.id,
+            FinancialStatement.statement_type == "balance_sheet"
+        ).order_by(FinancialStatement.period_end.desc()).first()
+        
+        latest_pl = db.query(FinancialStatement).filter(
+            FinancialStatement.company_id == company.id,
+            FinancialStatement.statement_type == "profit_loss"
+        ).order_by(FinancialStatement.period_end.desc()).first()
+        
+        if latest_bs and latest_pl:
+            try:
+                ratios = FinancialAnalyzer.calculate_all_ratios({
+                    "balance_sheet": latest_bs.data,
+                    "profit_loss": latest_pl.data
+                })
+                cash_flow = FinancialAnalyzer.analyze_cash_flow(db, company.id)
+                health = FinancialAnalyzer.calculate_financial_health_score(ratios, cash_flow)
+                total_score += health['total_score']
+                scored_count += 1
+            except:
+                pass
+    
+    avg_score = total_score / scored_count if scored_count > 0 else 0
     
     return {
         "total_companies": total_companies,
-        "avg_health_score": 0, # Placeholder until we have more scores
+        "avg_health_score": round(avg_score, 1),
         "active_alerts": 0
     }
 

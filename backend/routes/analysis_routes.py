@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import sys
 import os
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -208,7 +209,7 @@ async def calculate_credit_score(
 @router.get("/{company_id}/health-score", response_model=FinancialHealthResponse)
 async def get_financial_health_score(
     company_id: int,
-    language: str = Query("en", regex="^(en|hi)$"),
+    language: str = Query("en", pattern="^(en|hi)$"),
     include_ai_insights: bool = True,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -360,7 +361,7 @@ async def analyze_cash_flow(
 @router.get("/{company_id}/report")
 async def get_investor_report(
     company_id: int,
-    language: str = Query("en", regex="^(en|hi)$"),
+    language: str = Query("en", pattern="^(en|hi)$"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -428,4 +429,68 @@ async def get_investor_report(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate report: {str(e)}"
+        )
+@router.post("/{company_id}/chat")
+async def chat_with_data(
+    company_id: int,
+    message_data: Dict[str, str],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Chat with AI about company's financial data
+    """
+    # Verify company ownership
+    company = db.query(Company).filter(
+        Company.id == company_id,
+        Company.user_id == current_user.id
+    ).first()
+    
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+    
+    # Get context (latest financial statements and health score)
+    health_data = await get_financial_health_score(company_id, "en", False, current_user, db)
+    
+    if not ai_service:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service not available"
+        )
+
+    user_message = message_data.get("message", "")
+    
+    system_prompt = f"""You are a senior financial advisor for SMEs. 
+    You have access to the financial health data for '{company.name}' in the {company.industry.value if hasattr(company.industry, 'value') else company.industry} industry.
+    
+    Context:
+    - Health Score: {health_data['overall_score']}/100 ({health_data['grade']})
+    - Key Ratios: {json.dumps(health_data['ratios'])}
+    - Cash Flow Summary: {json.dumps(health_data['cash_flow_summary'])}
+    
+    Answer the user's questions accurately, professionally, and clearly. 
+    If they ask for recommendations, suggest cost optimization or suitable financial products based on their grade.
+    Keep responses concise but insightful."""
+
+    try:
+        response = ai_service.generate_completion(system_prompt, user_message)
+        
+        # Log chat
+        AuditLogger.log_event(
+            db=db,
+            user_id=current_user.id,
+            event_type="financial_chat",
+            action="message_sent",
+            resource_type="company",
+            resource_id=company_id
+        )
+        
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Chat failed: {str(e)}"
         )

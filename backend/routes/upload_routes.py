@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 import os
 import sys
+import json
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,6 +30,7 @@ class UploadResponse(BaseModel):
     file_type: str
     status: str
     data_summary: Optional[Dict[str, Any]] = None
+    parsed_data: Optional[Dict[str, Any]] = None
 
 
 @router.post("/{company_id}/financial-statement", response_model=UploadResponse)
@@ -44,7 +46,7 @@ async def upload_financial_statement(
     """
     Upload financial statement (CSV, XLSX, or PDF)
     
-    Parses the document and stores structured financial data
+    Parses the document, uses AI for deep extraction, and stores structured financial data
     """
     # Verify company ownership
     company = db.query(Company).filter(
@@ -78,80 +80,71 @@ async def upload_financial_statement(
     
     # Parse file based on type
     try:
+        parsed_data = {}
         structured_data = False
+        text_to_parse = ""
+
         if file_ext == '.csv':
             df = DocumentParser.parse_csv(file_content)
+            text_to_parse = df.head(100).to_string()
             if statement_type == 'balance_sheet':
                 parsed_data = FinancialStatementParser.parse_balance_sheet(df)
-                structured_data = bool(parsed_data.get("assets", {}).get("current_assets"))
             elif statement_type == 'profit_loss':
                 parsed_data = FinancialStatementParser.parse_profit_loss(df)
-                structured_data = bool(parsed_data.get("revenue", {}).get("items"))
-            else:
-                parsed_data = {"raw_data": df.to_dict()}
+            structured_data = bool(parsed_data.get("assets") or parsed_data.get("revenue"))
                 
         elif file_ext in ['.xlsx', '.xls']:
             sheets = DocumentParser.parse_excel(file_content)
             first_sheet = list(sheets.values())[0]
+            text_to_parse = first_sheet.head(100).to_string()
             if statement_type == 'balance_sheet':
                 parsed_data = FinancialStatementParser.parse_balance_sheet(first_sheet)
-                structured_data = bool(parsed_data.get("assets", {}).get("current_assets"))
             elif statement_type == 'profit_loss':
                 parsed_data = FinancialStatementParser.parse_profit_loss(first_sheet)
-                structured_data = bool(parsed_data.get("revenue", {}).get("items"))
-            else:
-                parsed_data = {"raw_data": first_sheet.to_dict()}
+            structured_data = bool(parsed_data.get("assets") or parsed_data.get("revenue"))
                 
         elif file_ext == '.pdf':
             pdf_data = DocumentParser.parse_pdf(file_content)
+            text_to_parse = pdf_data['text']
             if pdf_data['tables']:
                 first_table = pdf_data['tables'][0]
                 if statement_type == 'balance_sheet':
                     parsed_data = FinancialStatementParser.parse_balance_sheet(first_table)
-                    structured_data = bool(parsed_data.get("assets", {}).get("current_assets"))
                 elif statement_type == 'profit_loss':
                     parsed_data = FinancialStatementParser.parse_profit_loss(first_table)
-                    structured_data = bool(parsed_data.get("revenue", {}).get("items"))
-                else:
-                    parsed_data = {"raw_data": first_table.to_dict()}
-            else:
-                parsed_data = {"text": pdf_data['text']}
-        else:
-            raise ValueError("Unsupported file type")
+                structured_data = bool(parsed_data.get("assets") or parsed_data.get("revenue"))
         
-        # AI Fallback: If rule-based parsing failed to get structured data, use AI
-        if not structured_data and ai_service:
-            from services.ai_service import ai_service
-            import json
+        # Deep AI Extraction (Always try if AI is available to refine or extract from text)
+        if ai_service:
+            snippet = text_to_parse[:5000] # Use more text for AI
             
-            # Prepare text for AI
-            if file_ext == '.pdf':
-                text_to_parse = pdf_data['text'][:4000] # Limit to first 4k chars
-            else:
-                # For CSV/Excel, just take the first few rows as string
-                text_to_parse = df.head(50).to_string() if 'df' in locals() else ""
-            
-            system_prompt = f"You are a financial data extractor. Extract {statement_type} items from the provided text into structured JSON."
-            user_prompt = f"Extract {statement_type} data from this text:\n\n{text_to_parse}\n\nReturn ONLY a JSON object that fits the application's {statement_type} structure."
+            system_prompt = f"You are a professional financial data extractor. Clean and extract {statement_type} line items into a highly structured JSON format."
+            user_prompt = f"Extract all relevant financial figures for a {statement_type} from this data:\n\n{snippet}\n\nReturn ONLY a JSON object with the keys 'assets' (current, fixed, total), 'liabilities' (current, long_term, total), 'equity' if balance_sheet, OR 'revenue', 'expenses', 'profit' if profit_loss."
             
             try:
                 ai_extracted = ai_service.generate_completion(system_prompt, user_prompt)
-                # Simple cleanup of markdown blocks
+                # Cleanup markdown
+                ai_extracted = ai_extracted.strip()
                 if "```json" in ai_extracted:
                     ai_extracted = ai_extracted.split("```json")[1].split("```")[0].strip()
                 elif "```" in ai_extracted:
                     ai_extracted = ai_extracted.split("```")[1].split("```")[0].strip()
                 
-                new_data = json.loads(ai_extracted)
-                if new_data:
-                    parsed_data = new_data
+                ai_data = json.loads(ai_extracted)
+                if ai_data:
+                    # Merge or overwrite with AI data as it's often more accurate for messy text
+                    # We'll merge by preferring AI data where it has values
+                    parsed_data = ai_data if not structured_data else {**parsed_data, **ai_data}
             except Exception as ai_e:
-                print(f"AI parsing failed: {str(ai_e)}")
+                print(f"AI extraction failed/incomplete: {str(ai_e)}")
         
+        if not parsed_data:
+            raise ValueError("Could not extract any meaningful financial data from the file.")
+            
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Failed to parse file: {str(e)}"
+            detail=f"Failed to process file: {str(e)}"
         )
     
     # Save to database
@@ -198,7 +191,8 @@ async def upload_financial_statement(
             "total_revenue": financial_statement.total_revenue,
             "net_profit": financial_statement.net_profit,
             "records_parsed": len(parsed_data) if isinstance(parsed_data, dict) else 0
-        }
+        },
+        "parsed_data": parsed_data
     }
 
 

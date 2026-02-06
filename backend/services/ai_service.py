@@ -1,6 +1,6 @@
 """
 AI Service for generating insights and recommendations
-Supports OpenAI GPT-4 and Claude
+Supports OpenAI GPT-4, Claude, OpenRouter, and Google Gemini
 """
 from typing import Dict, List, Any, Optional
 import json
@@ -13,7 +13,7 @@ from config import settings
 
 # Import AI SDKs
 try:
-    import openai
+    from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
@@ -24,6 +24,12 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
 
 class AIService:
     """AI-powered insights and recommendations generator"""
@@ -32,18 +38,78 @@ class AIService:
         """Initialize AI service based on configuration"""
         self.provider = settings.AI_PROVIDER
         
-        if self.provider == "openai" and OPENAI_AVAILABLE:
-            openai.api_key = settings.OPENAI_API_KEY
+        if self.provider == "gemini" and GEMINI_AVAILABLE:
+            genai.configure(api_key=settings.GEMINI_API_KEY)
+            self.client = genai.GenerativeModel(settings.GEMINI_MODEL)
+            self.model = settings.GEMINI_MODEL
+            
+        elif self.provider == "openrouter":
+            self.api_key = settings.OPENROUTER_API_KEY
+            self.model = settings.OPENROUTER_MODEL
+            self.client = None  # Will use requests library instead
+            
+        elif self.provider == "openai" and OPENAI_AVAILABLE:
+            self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
             self.model = settings.OPENAI_MODEL
         elif self.provider == "claude" and ANTHROPIC_AVAILABLE:
             self.client = anthropic.Anthropic(api_key=settings.CLAUDE_API_KEY)
             self.model = settings.CLAUDE_MODEL
         else:
-            raise ValueError(f"AI provider '{self.provider}' not available or configured")
+            # Fallback or error if not configured
+            if settings.DEBUG:
+                print(f"Warning: AI provider '{self.provider}' not fully configured.")
+            self.client = None
     
-    def _call_openai(self, system_prompt: str, user_prompt: str) -> str:
-        """Call OpenAI API"""
-        response = openai.ChatCompletion.create(
+    def _call_openrouter(self, system_prompt: str, user_prompt: str) -> str:
+        """Call OpenRouter API using requests"""
+        import requests
+        import json
+        
+        if not self.api_key:
+            return "OpenRouter API key not configured."
+        
+        try:
+            # print(f"Calling OpenRouter with model: {self.model}")
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "HTTP-Referer": "http://localhost:3000",  # Frontend URL
+                    "X-Title": "SME Financial Health Platform",
+                    "Content-Type": "application/json"
+                },
+                data=json.dumps({
+                    "model": self.model,
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 1500
+                }),
+                timeout=30
+            )
+            
+            if response.status_code != 200:
+                print(f"OpenRouter Error {response.status_code}: {response.text}")
+                return f"AI service error: OpenRouter returned status {response.status_code}"
+
+            result = response.json()
+            if 'choices' in result and len(result['choices']) > 0:
+                return result['choices'][0]['message']['content']
+            else:
+                return "AI service returned empty response."
+                
+        except Exception as e:
+            print(f"OpenRouter API error: {str(e)}")
+            return f"AI service error: {str(e)}"
+    
+    def _call_llm(self, system_prompt: str, user_prompt: str) -> str:
+        """Call LLM provider (OpenAI style)"""
+        if not self.client:
+            return "AI service not configured. Please check your API keys."
+            
+        response = self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -66,10 +132,37 @@ class AIService:
         )
         return message.content[0].text
     
+    def _call_gemini(self, system_prompt: str, user_prompt: str) -> str:
+        """Call Google Gemini API"""
+        if not self.client:
+            return "Gemini service not configured. Please check your API key."
+        
+        try:
+            # Combine system and user prompts for Gemini
+            combined_prompt = f"{system_prompt}\n\n{user_prompt}"
+            response = self.client.generate_content(combined_prompt)
+            
+            # Check if response has content (might be blocked by safety filters)
+            if hasattr(response, 'text'):
+                return response.text
+            elif hasattr(response, 'parts') and response.parts:
+                return response.parts[0].text
+            else:
+                return "I apologize, but I cannot provide a response to that specific query due to safety guidelines."
+        except Exception as e:
+            print(f"Gemini API error: {str(e)}")
+            if "400" in str(e) or "404" in str(e):
+                 return f"AI service error: Invalid model configuration or API key."
+            return f"AI service error: {str(e)}"
+    
     def generate_completion(self, system_prompt: str, user_prompt: str) -> str:
         """Generate AI completion using configured provider"""
-        if self.provider == "openai":
-            return self._call_openai(system_prompt, user_prompt)
+        if self.provider == "gemini":
+            return self._call_gemini(system_prompt, user_prompt)
+        elif self.provider == "openrouter":
+            return self._call_openrouter(system_prompt, user_prompt)
+        elif self.provider == "openai":
+            return self._call_llm(system_prompt, user_prompt)
         elif self.provider == "claude":
             return self._call_claude(system_prompt, user_prompt)
         else:
@@ -306,4 +399,4 @@ Use professional financial terminology and keep it rigorous yet accessible."""
 
 
 # Global AI service instance
-ai_service = AIService() if (settings.OPENAI_API_KEY or settings.CLAUDE_API_KEY) else None
+ai_service = AIService() if (settings.OPENAI_API_KEY or settings.CLAUDE_API_KEY or settings.OPENROUTER_API_KEY or settings.GEMINI_API_KEY) else None

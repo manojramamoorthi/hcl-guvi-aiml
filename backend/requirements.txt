@@ -18,6 +18,7 @@ pdfplumber==0.10.3  # Advanced PDF parsing
 # AI/ML
 openai==1.10.0
 anthropic==0.8.1  # Claude API
+google-generativeai==0.3.2  # Google Gemini
 langchain==0.1.5
 
 # Security & Authentication

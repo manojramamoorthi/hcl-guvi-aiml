@@ -11,8 +11,21 @@ const Login: React.FC = () => {
     const [error, setError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    const { login } = useAuth();
+    const { login, reviewerLogin } = useAuth();
     const navigate = useNavigate();
+
+    const handleReviewerLogin = async () => {
+        setIsSubmitting(true);
+        setError('');
+        try {
+            await reviewerLogin();
+            navigate('/dashboard');
+        } catch (err: any) {
+            setError(getErrorMessage(err));
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -98,6 +111,27 @@ const Login: React.FC = () => {
                             )}
                         </button>
                     </form>
+
+                    <div className="relative my-8">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-slate-200"></span>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="px-2 bg-white text-slate-500">Or specialized access</span>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleReviewerLogin}
+                        disabled={isSubmitting}
+                        className="w-full py-3.5 px-4 border-2 border-primary-100 text-primary-600 rounded-xl font-bold hover:bg-primary-50 transition-all flex items-center justify-center space-x-2"
+                    >
+                        {isSubmitting ? (
+                            <Loader2 className="w-6 h-6 animate-spin" />
+                        ) : (
+                            <span>Reviewer Login (Auto-seed Data)</span>
+                        )}
+                    </button>
 
                     <p className="mt-8 text-center text-slate-600">
                         Don't have an account?{' '}
